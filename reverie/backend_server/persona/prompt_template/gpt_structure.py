@@ -10,6 +10,7 @@ import openai
 import time 
 
 from utils import *
+import ollama
 
 openai.api_key = openai_api_key
 
@@ -194,34 +195,10 @@ def ChatGPT_safe_generate_response_OLD(prompt,
 # ###################[SECTION 2: ORIGINAL GPT-3 STRUCTURE] ###################
 # ============================================================================
 
-def GPT_request(prompt, gpt_parameter): 
-  """
-  Given a prompt and a dictionary of GPT parameters, make a request to OpenAI
-  server and returns the response. 
-  ARGS:
-    prompt: a str prompt
-    gpt_parameter: a python dictionary with the keys indicating the names of  
-                   the parameter and the values indicating the parameter 
-                   values.   
-  RETURNS: 
-    a str of GPT-3's response. 
-  """
-  temp_sleep()
-  try: 
-    response = openai.Completion.create(
-                model=gpt_parameter["engine"],
-                prompt=prompt,
-                temperature=gpt_parameter["temperature"],
-                max_tokens=gpt_parameter["max_tokens"],
-                top_p=gpt_parameter["top_p"],
-                frequency_penalty=gpt_parameter["frequency_penalty"],
-                presence_penalty=gpt_parameter["presence_penalty"],
-                stream=gpt_parameter["stream"],
-                stop=gpt_parameter["stop"],)
-    return response.choices[0].text
-  except: 
-    print ("TOKEN LIMIT EXCEEDED")
-    return "TOKEN LIMIT EXCEEDED"
+def LLaMA_request(prompt, llama_parameter):
+    temp_sleep()
+    response = ollama.generate(model='llama2:70b', prompt=prompt, **llama_parameter)
+    return response["response"]
 
 
 def generate_prompt(curr_input, prompt_lib_file): 
@@ -253,24 +230,42 @@ def generate_prompt(curr_input, prompt_lib_file):
 
 
 def safe_generate_response(prompt, 
-                           gpt_parameter,
+                           gpt_param,
                            repeat=5,
                            fail_safe_response="error",
                            func_validate=None,
                            func_clean_up=None,
-                           verbose=False): 
-  if verbose: 
-    print (prompt)
-
-  for i in range(repeat): 
-    curr_gpt_response = GPT_request(prompt, gpt_parameter)
-    if func_validate(curr_gpt_response, prompt=prompt): 
-      return func_clean_up(curr_gpt_response, prompt=prompt)
+                           verbose=False):
+    """
+    Attempts to generate a response using LLaMA-2, with retries and validation.
+    
+    Args:
+      prompt (str): The input prompt for the model.
+      llama_parameter (dict): The parameters for the LLaMA-2 model request.
+      repeat (int): Number of times to retry the request on failure.
+      fail_safe_response (str): Response to return if all retries fail.
+      func_validate (function): A function to validate the response. Should return bool.
+      func_clean_up (function): A function to clean up the response before returning.
+      verbose (bool): If True, prints debug information.
+      
+    Returns:
+      str: The validated and cleaned response, or a fail-safe response.
+    """
+    gpt_param = {k: v for k, v in gpt_param.items() if k == 'stream'}
+    llama_parameter = gpt_param
+    
     if verbose: 
-      print ("---- repeat count: ", i, curr_gpt_response)
-      print (curr_gpt_response)
-      print ("~~~~")
-  return fail_safe_response
+        print(prompt)
+
+    for i in range(repeat): 
+        curr_llama_response = LLaMA_request(prompt, llama_parameter)
+        if func_validate and func_validate(curr_llama_response, prompt=prompt): 
+            return func_clean_up(curr_llama_response, prompt=prompt) if func_clean_up else curr_llama_response
+        if verbose: 
+            print("---- repeat count: ", i, curr_llama_response)
+            print(curr_llama_response)
+            print("~~~~")
+    return fail_safe_response
 
 
 def get_embedding(text, model="text-embedding-ada-002"):

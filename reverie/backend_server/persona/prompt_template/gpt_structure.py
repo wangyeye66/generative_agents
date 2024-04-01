@@ -12,7 +12,7 @@ import time
 from utils import *
 import ollama
 
-openai.api_key = openai_api_key
+# openai.api_key = openai_api_key
 
 def temp_sleep(seconds=0.1):
   time.sleep(seconds)
@@ -268,13 +268,12 @@ def safe_generate_response(prompt,
     return fail_safe_response
 
 
-def get_embedding(text, model="text-embedding-ada-002"):
+def get_embedding(text, model="llama2"):
   text = text.replace("\n", " ")
-  if not text: 
+  if not text:
     text = "this is blank"
-  return openai.Embedding.create(
-          input=[text], model=model)['data'][0]['embedding']
-
+  return ollama.embeddings(model=model,prompt=text)['embedding']
+                           
 
 if __name__ == '__main__':
   gpt_parameter = {"engine": "text-davinci-003", "max_tokens": 50, 
